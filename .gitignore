@@ -1,0 +1,8 @@
+# exclude everything here
+mbox_files/*
+
+# exception (keep this stuff)
+!mbox_files/
+
+
+
