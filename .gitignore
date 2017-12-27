@@ -1,5 +1,6 @@
 # exclude everything here
 mbox_files/*
+mbox_files_new/
 
 # exception (keep this stuff)
 !mbox_files/
