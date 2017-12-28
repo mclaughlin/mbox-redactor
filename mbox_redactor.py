@@ -29,33 +29,76 @@ def set_headers(headers, message_new):
         message_new[key] = value
     return message_new
 
+def process_payload(message_new, headers, payload):
+    message_new = set_headers(headers, message_new)
+    message_new.set_payload(payload)
+    return message_new
+
+def process_multipart(message, message_new):
+
+    multipart_payload = message.get_payload()
+
+    i = 0
+
+    for payload in multipart_payload:
+
+        i += 1
+        print(crayons.green(i))
+         
+        #print(crayons.blue(type(payload)))
+        payload_decoded = payload.get_payload(decode=True)
+
+        #set output
+        message_new = set_headers(payload.items(), message_new)
+        message_new.set_payload(payload_decoded)
+
+        if payload.is_multipart():
+            print(crayons.red(payload))
+            #recursive call
+            message_new = process_multipart(payload, message_new)
+
+    return message_new
+
 def process_message(message, message_new):
     if message.is_multipart():
+        
+        new_message = process_multipart(message, message_new)
 
-        multipart_payload = message.get_payload()
-#        print(crayons.yellow(f'multipart payload: {multipart_payload}'))
+#        multipart_payload = message.get_payload()
+##        print(crayons.yellow(f'multipart payload: {multipart_payload}'))
+#
+#        for payload in multipart_payload:
+#
+#            payload_decoded = payload.get_payload(decode=True)
+#
+#            print(crayons.yellow(40*'-'))
+##            print_headers(payload.items())
+##            print(crayons.cyan(payload_decoded))
+#
+#            #set output
+#            message_new = set_headers(payload.items(), message_new)
+#            message_new.set_payload(payload_decoded)
+#            print(50*'%')
+#
+#            if payload.is_multipart():
+#                process_payload(
+#                print(crayons.red(payload.items()))
+#                print(crayons.red(payload.keys()))
+#                print(crayons.red(payload.values()))
+           
 
-        for payload in multipart_payload:
-
-            payload_decoded = payload.get_payload(decode=True)
-
-            print(crayons.yellow(40*'-'))
-#            print_headers(payload.items())
-#            print(crayons.cyan(payload_decoded))
-
-            #set output
-            message_new = set_headers(payload.items(), message_new)
-            message_new.set_payload(payload_decoded)
-            print(50*'%')
-            
     else:
 
         message_new = set_headers(headers, message_new)
+
 #        print(crayons.green(f'NEW HEADERS: {message_new}'))
+
         payload = message.get_payload(decode=True)
+
 
 #        print(payload)
 #        print(40*'#')
+
 
         #set output
         message_new.set_payload(payload)
@@ -82,6 +125,7 @@ for filename in mbox_files:
                 message     = mbox[key]
                 unixfrom    = message.get_unixfrom()
                 headers     = message.items()
+
 #                values      = message.values()
 
                 #terminal output
@@ -91,18 +135,20 @@ for filename in mbox_files:
 #                print(f'unixfrom: {unixfrom}')
 #                print_headers(headers)
 
+
                 #output
                 message_new = mailbox.mboxMessage()
                 message_new.set_unixfrom(unixfrom)
                 message_new = process_message(message, message_new)
-                print(message_new.items())
+                print(crayons.blue(message_new.items()))
+                print(crayons.green(type(message_new)))
                 
                 #write file and finish up
                 mbox_new.add(message_new)
                 mbox_new.flush
                 mbox.unlock()
 
-            except (KeyError) as e:
+            except (KeyError, UnicodeEncodeError) as e:
                 print(e)
                 pass
  
