@@ -11,8 +11,8 @@ import crayons
 
 __version__ = '0.0.1'
 
-mbox_path     = './mbox_files/'
-mbox_path_new = './mbox_files_new/'
+mbox_path     = './mbox_files'
+mbox_path_new = './mbox_files_new'
 mbox_files    = os.listdir(mbox_path)
 
 if os.path.exists(mbox_path_new):
@@ -38,67 +38,31 @@ def process_multipart(message, message_new):
 
     multipart_payload = message.get_payload()
 
-    i = 0
-
     for payload in multipart_payload:
 
-        i += 1
-        print(crayons.green(i))
-         
-        #print(crayons.blue(type(payload)))
-        payload_decoded = payload.get_payload(decode=True)
-
-        #set output
         message_new = set_headers(payload.items(), message_new)
-        message_new.set_payload(payload_decoded)
+        payload_decoded = payload.get_payload(decode=True)
+        message_new.set_payload(str(payload_decoded)) #<-- the problem seems to be here
+
+#        print(crayons.green(payload_decoded))
 
         if payload.is_multipart():
-            print(crayons.red(payload))
+
             #recursive call
             message_new = process_multipart(payload, message_new)
 
     return message_new
 
 def process_message(message, message_new):
-    if message.is_multipart():
-        
-        new_message = process_multipart(message, message_new)
 
-#        multipart_payload = message.get_payload()
-##        print(crayons.yellow(f'multipart payload: {multipart_payload}'))
-#
-#        for payload in multipart_payload:
-#
-#            payload_decoded = payload.get_payload(decode=True)
-#
-#            print(crayons.yellow(40*'-'))
-##            print_headers(payload.items())
-##            print(crayons.cyan(payload_decoded))
-#
-#            #set output
-#            message_new = set_headers(payload.items(), message_new)
-#            message_new.set_payload(payload_decoded)
-#            print(50*'%')
-#
-#            if payload.is_multipart():
-#                process_payload(
-#                print(crayons.red(payload.items()))
-#                print(crayons.red(payload.keys()))
-#                print(crayons.red(payload.values()))
-           
+    if message.is_multipart():
+
+        new_message = process_multipart(message, message_new)
 
     else:
 
-        message_new = set_headers(headers, message_new)
-
-#        print(crayons.green(f'NEW HEADERS: {message_new}'))
-
+        message_new = set_headers(message.items(), message_new)
         payload = message.get_payload(decode=True)
-
-
-#        print(payload)
-#        print(40*'#')
-
 
         #set output
         message_new.set_payload(payload)
@@ -111,7 +75,7 @@ for filename in mbox_files:
     if (filename[-4:] == 'mbox'):
 
         mbox_file       = f'{mbox_path}/{filename}'
-        mbox_file_new   = f'{mbox_path_new}/{filename[:-5]}.new.box'
+        mbox_file_new   = f'{mbox_path_new}/{filename[:-5]}.new.mbox'
 
         mbox            = mailbox.mbox(mbox_file)
         mbox_new        = mailbox.mbox(mbox_file_new)
@@ -126,30 +90,27 @@ for filename in mbox_files:
                 unixfrom    = message.get_unixfrom()
                 headers     = message.items()
 
-#                values      = message.values()
-
-                #terminal output
-#                print('\n\n')
-#                print(f'Message #: {crayons.red(str(key))}')
-#                print(crayons.green(f'filename: {filename}'))
-#                print(f'unixfrom: {unixfrom}')
-#                print_headers(headers)
-
+#                print(crayons.blue(headers))
 
                 #output
                 message_new = mailbox.mboxMessage()
                 message_new.set_unixfrom(unixfrom)
+                message_new = set_headers(headers, message_new)
                 message_new = process_message(message, message_new)
-                print(crayons.blue(message_new.items()))
-                print(crayons.green(type(message_new)))
-                
+
                 #write file and finish up
+#                print(crayons.red(message_new))
                 mbox_new.add(message_new)
-                mbox_new.flush
-                mbox.unlock()
 
             except (KeyError, UnicodeEncodeError) as e:
-                print(e)
-                pass
+
+#                print(crayons.magenta(f"Error for '{mbox_file_new}' {e}"))
+                #pass
+                continue
+
+        mbox_new.flush
+        mbox_new.unlock()
+
+
  
 
