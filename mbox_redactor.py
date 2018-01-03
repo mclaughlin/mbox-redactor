@@ -38,18 +38,26 @@ def process_multipart(message, message_new):
 
     multipart_payload = message.get_payload()
 
-    for payload in multipart_payload:
+    for part in multipart_payload:
+        
+        charset = part.get_content_charset()
+        message_new = set_headers(part.items(), message_new)
+        payload = part.get_payload(decode=True)
 
-        message_new = set_headers(payload.items(), message_new)
-        payload_decoded = payload.get_payload(decode=True)
-        message_new.set_payload(str(payload_decoded)) #<-- the problem seems to be here
-
-#        print(crayons.green(payload_decoded))
-
-        if payload.is_multipart():
-
-            #recursive call
-            message_new = process_multipart(payload, message_new)
+        if charset is not None:
+            payload = str(payload, charset, "ignore").encode('utf8', 'replace')
+            payload = payload.decode('utf-8')
+            message_new.set_payload(payload)
+            #print(payload)
+        elif payload is None and part.is_multipart():
+            #multipart
+            payload = part.get_payload()
+            message_new = process_multipart(part, message_new)
+        #else:
+            #this is usually attachments
+            payload = str(payload).encode('utf8', 'replace')
+            payload = payload.decode('utf-8')
+            message_new.set_payload(payload)
 
     return message_new
 
@@ -63,6 +71,10 @@ def process_message(message, message_new):
 
         message_new = set_headers(message.items(), message_new)
         payload = message.get_payload(decode=True)
+        payload = payload.decode('utf-8')
+
+        #print(payload)
+        #payload = str(payload, message.get_content_charset(), "ignore").encode('utf8', 'replace')
 
         #set output
         message_new.set_payload(payload)
