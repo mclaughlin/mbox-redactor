@@ -40,24 +40,31 @@ def process_multipart(message, message_new):
 
     for part in multipart_payload:
         
-        charset = part.get_content_charset()
         message_new = set_headers(part.items(), message_new)
         payload = part.get_payload(decode=True)
+        charset = part.get_content_charset()
+        content_type = part.get_content_type()
 
-        if charset is not None:
-            payload = str(payload, charset, "ignore").encode('utf8', 'replace')
-            payload = payload.decode('utf-8')
-            message_new.set_payload(payload)
-            #print(payload)
-        elif payload is None and part.is_multipart():
-            #multipart
-            payload = part.get_payload()
+        headers = part.items()
+        message_new = set_headers(headers, message_new) 
+
+        if payload:
+
+            if not charset:
+                #usually attachments
+                payload = str(part.get_payload())
+            else:
+                payload = str(payload)
+                if payload.startswith("b'") and payload.endswith("'"):
+                    payload =  payload[2:-1]
+            message_new.set_payload(payload.encode('utf-8'))
+
+        elif part.is_multipart():
+
+            #add processing of multi-part headers/payload here
+
+            #recursive call
             message_new = process_multipart(part, message_new)
-        #else:
-            #this is usually attachments
-            payload = str(payload).encode('utf8', 'replace')
-            payload = payload.decode('utf-8')
-            message_new.set_payload(payload)
 
     return message_new
 
@@ -71,10 +78,8 @@ def process_message(message, message_new):
 
         message_new = set_headers(message.items(), message_new)
         payload = message.get_payload(decode=True)
-        payload = payload.decode('utf-8')
-
-        #print(payload)
-        #payload = str(payload, message.get_content_charset(), "ignore").encode('utf8', 'replace')
+        charset = message.get_content_charset()
+        #payload = payload.decode(charset)
 
         #set output
         message_new.set_payload(payload)
@@ -102,8 +107,6 @@ for filename in mbox_files:
                 unixfrom    = message.get_unixfrom()
                 headers     = message.items()
 
-#                print(crayons.blue(headers))
-
                 #output
                 message_new = mailbox.mboxMessage()
                 message_new.set_unixfrom(unixfrom)
@@ -111,13 +114,11 @@ for filename in mbox_files:
                 message_new = process_message(message, message_new)
 
                 #write file and finish up
-#                print(crayons.red(message_new))
                 mbox_new.add(message_new)
 
             except (KeyError, UnicodeEncodeError) as e:
 
-#                print(crayons.magenta(f"Error for '{mbox_file_new}' {e}"))
-                #pass
+                print(crayons.magenta(f"Error for '{mbox_file_new}' {e}"))
                 continue
 
         mbox_new.flush
