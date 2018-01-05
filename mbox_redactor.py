@@ -40,39 +40,9 @@ def process_multipart(message, message_new):
 
     for part in multipart_payload:
         
-        message_new = set_headers(part.items(), message_new)
-        payload = part.get_payload(decode=True)
-        charset = part.get_content_charset()
-        content_type = part.get_content_type()
-
         headers = part.items()
         message_new = set_headers(headers, message_new) 
-
-        if payload:
-
-#            if not charset:
-#                #usually attachments
-#                payload = str(part.get_payload())
-#                print(content_type)
-#            else:
-#                payload = str(payload)
-#                if payload.startswith("b'") and payload.endswith("'"):
-#                    payload =  payload[2:-1]
-
-
-            #filtering needs to occur here
-
-#            message_new.set_payload(payload.encode('utf-8'))
-
-            message_new = process_message(part, message_new)
-
-
-        elif part.is_multipart():
-
-            #add processing of multi-part headers/payload here
-
-            #recursive call
-            message_new = process_message(part, message_new)
+        message_new = process_message(part, message_new)
 
     return message_new
 
