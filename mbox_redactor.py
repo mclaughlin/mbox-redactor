@@ -50,21 +50,29 @@ def process_multipart(message, message_new):
 
         if payload:
 
-            if not charset:
-                #usually attachments
-                payload = str(part.get_payload())
-            else:
-                payload = str(payload)
-                if payload.startswith("b'") and payload.endswith("'"):
-                    payload =  payload[2:-1]
-            message_new.set_payload(payload.encode('utf-8'))
+#            if not charset:
+#                #usually attachments
+#                payload = str(part.get_payload())
+#                print(content_type)
+#            else:
+#                payload = str(payload)
+#                if payload.startswith("b'") and payload.endswith("'"):
+#                    payload =  payload[2:-1]
+
+
+            #filtering needs to occur here
+
+#            message_new.set_payload(payload.encode('utf-8'))
+
+            message_new = process_message(part, message_new)
+
 
         elif part.is_multipart():
 
             #add processing of multi-part headers/payload here
 
             #recursive call
-            message_new = process_multipart(part, message_new)
+            message_new = process_message(part, message_new)
 
     return message_new
 
@@ -81,8 +89,19 @@ def process_message(message, message_new):
         charset = message.get_content_charset()
         #payload = payload.decode(charset)
 
-        #set output
-        message_new.set_payload(payload)
+        charset = message.get_content_charset()
+        content_type = message.get_content_type()
+
+        if not charset:
+            #usually attachments
+            payload = str(message.get_payload())
+            print(content_type)
+        else:
+            payload = str(payload)
+            if payload.startswith("b'") and payload.endswith("'"):
+                payload =  payload[2:-1]
+
+        message_new.set_payload(payload.encode('utf-8'))
 
     return message_new
 
