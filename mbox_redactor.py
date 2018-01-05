@@ -39,7 +39,7 @@ def process_multipart(message, message_new):
     multipart_payload = message.get_payload()
 
     for part in multipart_payload:
-        
+
         headers = part.items()
         message_new = set_headers(headers, message_new) 
         message_new = process_message(part, message_new)
@@ -54,22 +54,29 @@ def process_message(message, message_new):
 
     else:
 
-        message_new = set_headers(message.items(), message_new)
-        payload = message.get_payload(decode=True)
-        charset = message.get_content_charset()
-        #payload = payload.decode(charset)
-
-        charset = message.get_content_charset()
         content_type = message.get_content_type()
+        charset = message.get_content_charset()
+        message_new = set_headers(message.items(), message_new)
+
 
         if not charset:
-            #usually attachments
-            payload = str(message.get_payload())
-            print(content_type)
+            payload = message.get_payload()
         else:
-            payload = str(payload)
+            payload = str(message.get_payload(decode=True), str(charset), "ignore")
+
             if payload.startswith("b'") and payload.endswith("'"):
                 payload =  payload[2:-1]
+
+            payload = str(payload).encode('utf8', 'replace')
+
+#        if not charset:
+#            #usually attachments
+#            payload = str(message.get_payload())
+##            print(content_type)
+#        else:
+#            payload = str(payload)
+#            if payload.startswith("b'") and payload.endswith("'"):
+#                payload =  payload[2:-1]
 
         message_new.set_payload(payload.encode('utf-8'))
 
