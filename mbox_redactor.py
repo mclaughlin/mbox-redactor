@@ -51,10 +51,13 @@ def process_message(msg, msg_new):
 #    print(f'payload: {msg.get_payload()}')
 #    input('click')
 
-    if msg.is_multipart():
+    if msg.is_multipart() and isinstance(msg, mailbox.mboxMessage):
         if not isinstance(msg, str):
             msg_new = set_headers(msg.items(), msg_new)        
         msg_new = process_multipart(msg, msg_new)
+    elif msg.is_multipart():
+        #need to find out why this payload isn't being included
+        print(msg)
     else:
         msg_new = set_headers(msg.items(), msg_new)
         if not charset or content_type == 'text/plain':
