@@ -31,26 +31,7 @@ def multipart_message(msg, msg_new):
     for part in msg.get_payload():
         headers = msg.items()
         set_headers(headers, msg_new)
-        if isinstance(part, email.message.Message):
-            if part.is_multipart():           
-                msg_new = multipart_message(part, msg_new)
-            else:
-                #todo!
-                #rather than assign the output of single_message()
-                #to msg_new, add it to a dictionary. Then loop
-                #through that dictionary at the end under main()
-                #and add it to mbox_new
-
-                #payload is a string()
-                #print(type(part.get_payload()))
-                msg_new = single_message(part, msg_new)
-                print(100*'#')
-                print(msg_new)
-                #input('click')
-        else:
-            msg_new = single_message(part, msg_new)
-    #print(75*'#')
-    #print(msg_new)
+        msg_new = process_message(part, msg_new)
     return msg_new
 
 def single_message(msg, msg_new):
@@ -68,10 +49,19 @@ def single_message(msg, msg_new):
         if payload.startswith("b'") and payload.endswith("'"):
             payload = payload[2:-1]
 
-    #print(type(payload))
+#    if payload:
+#        msg_new.set_payload(payload) 
+#    if msg_new:
+#        mbox_new.add(msg_new)
+
+        add_payload(payload, msg_new)
+    return msg_new
+
+def add_payload(payload, msg_new):
     if payload:
         msg_new.set_payload(payload)
-    return msg_new
+    if msg_new:
+        mbox_new.add(msg_new)
 
  
 def process_message(msg, msg_new):
@@ -101,12 +91,6 @@ for filename in mbox_files:
                     msg_new = msg_new.set_unixfrom(unixfrom)
 
                 msg_new = process_message(msg, msg_new)
-
-                #todo!
-                #check to see if mbox_new is a dictionary, if so, loop
-                #through the array and add each element to mbox_new
-
-                mbox_new.add(msg_new)
 
             except (AttributeError, KeyError, UnicodeEncodeError) as e:
 
