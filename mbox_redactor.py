@@ -26,11 +26,8 @@ def set_headers(headers, msg_new):
         msg_new[key] = value
     return msg_new
 
-#you might have to break each loop into a seperate function
 def multipart_message(msg, msg_new):
     for part in msg.get_payload():
-        headers = msg.items()
-        set_headers(headers, msg_new)
         msg_new = process_message(part, msg_new)
     return msg_new
 
@@ -38,8 +35,6 @@ def single_message(msg, msg_new):
  
     content_type = msg.get_content_type()
     charset = msg.get_content_charset() 
-    headers = msg.items() 
-    set_headers(headers, msg_new)
  
     if not charset or content_type == 'text/plain':
         #usually attachments
@@ -48,13 +43,8 @@ def single_message(msg, msg_new):
         payload = str(msg.get_payload(decode=True))
         if payload.startswith("b'") and payload.endswith("'"):
             payload = payload[2:-1]
-
-#    if payload:
-#        msg_new.set_payload(payload) 
-#    if msg_new:
-#        mbox_new.add(msg_new)
-
-        add_payload(payload, msg_new)
+    
+    add_payload(payload, msg_new)
     return msg_new
 
 def add_payload(payload, msg_new):
@@ -65,10 +55,12 @@ def add_payload(payload, msg_new):
 
  
 def process_message(msg, msg_new):
-    #if msg and msg_new:
     if msg.is_multipart():
+        if isinstance(msg, mailbox.mboxMessage):
+            set_headers(msg.items(), msg_new) 
         msg_new = multipart_message(msg, msg_new)
     else:
+        set_headers(msg.items(), msg_new)
         msg_new = single_message(msg, msg_new)
     return msg_new
 
@@ -83,13 +75,8 @@ for filename in mbox_files:
 
         for key, value in mbox.iteritems():
             try:
-                msg      = mbox[key]
-                msg_new  = mailbox.mboxMessage()
-
-                unixfrom = msg.get_unixfrom()
-                if unixfrom:
-                    msg_new = msg_new.set_unixfrom(unixfrom)
-
+                msg     = mbox[key]
+                msg_new = mailbox.mboxMessage()
                 msg_new = process_message(msg, msg_new)
 
             except (AttributeError, KeyError, UnicodeEncodeError) as e:
