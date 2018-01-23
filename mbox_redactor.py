@@ -21,105 +21,132 @@ if os.path.exists(mbox_path_new):
 
 os.makedirs(mbox_path_new)
 
-def set_headers(headers, msg_new):
+def set_headers(headers, mboxfile):
     for key, value in headers:
-        msg_new[key] = value
-    return msg_new
+        #print(f'{key}: {value}')
+        write_mbox(f'{key}: {value}', mboxfile)
 
-def multipart_message(msg, msg_new):
-    print(100*'<')
-    messages = list(msg.walk())
-    print(len(messages))
-    print(messages)
+def multipart_message(msg, mboxfile):
+
+    messages       = list(msg.walk())
+    sub_msg_count  = 0
+    sub_messages   = {}
+    boundary_count = {}
+    debugging      = False
+
+    if debugging:
+        print(100*'<')
+        print(len(messages))
+        print(messages)
+
     for part in messages:
-        print(100*'#')
-        payload = None
-        set_headers(part.items(), msg_new)
+        
         content_type = part.get_content_type()
         charset = part.get_content_charset()
         boundary = part.get_boundary()
         charset = part.get_charset()
+        message_id = part['Message-ID']
+        date = part['Date']
 
-        print(f'{type(part)} - {boundary}')
-        print(f'part ID: {id(part)}')
-        print(f'boundary: {boundary}')
-        print(f'content type: {part.get_content_type()}')
-        print(f'charset: {part.get_content_charset()}')
-        print(f'headers: {part.items()}')
-        print(f'content_disposition: {msg.get_content_disposition()}')
+        if debugging:
+            print(100*'#')
+            print(f'{type(part)} - {boundary}')
+            print(f'part ID: {id(part)}')
+            print(f'boundary: {boundary}')
+            print(f'content type: {part.get_content_type()}')
+            print(f'charset: {part.get_content_charset()}')
+            print(f'headers: {part.items()}')
+            print(f'content_disposition: {part.get_content_disposition()}')
+            print(f"message-id: {part['Message-ID']}")
+            print(50*'. ')
+            #print(msg)
+            #print(100*'~')
+            print('**OUTPUT**')
 
-        print(100*'~')
-        print(msg)
+        if type(part) is mailbox.mboxMessage: 
+            if message_id:
+                print(f"From {message_id} {date}")
+                write_mbox(f"From {message_id} {date}", mboxfile)
+            set_headers(part.items(), mboxfile)
+            mbox_boundary = part.get_boundary()
 
-        if type(part) is email.message.Message:
-            if boundary and part is not messages \
-                    and type(part.get_payload()) is list:
-                nested_message(part, msg_new)
-            else:
-                single_message(part, msg_new)
+        elif type(part) is email.message.Message \
+                and type(part.get_payload()) is list:
+            sub_messages[boundary] = part.get_payload()
+            print(f'--{mbox_boundary}')
+            write_mbox(f'--{mbox_boundary}', mboxfile)
+            set_headers(part.items(), mboxfile)
 
-    print(100*'>')
-    print('\n')
-    return msg_new
+        elif type(part) is email.message.Message \
+                and any(part in val for val in sub_messages.values()):
+            for boundary, message_list in sub_messages.items():
+                if part in message_list:
+                    sub_msg_count += 1
+                    print(f'--{boundary}')
+                    write_mbox(f'--{boundary}', mboxfile)
+                    set_headers(part.items(), mboxfile)
+                    single_message(part, mboxfile)
+                    
+                if sub_msg_count == len(message_list):
+                    print(f'--{boundary}--')
+                    write_mbox(f'--{boundary}--', mboxfile)
+                    sub_msg_count = 0
+                    
+        elif mbox_boundary \
+                and (type(part) is mailbox.mboxMessage \
+                or   type(part) is email.message.Message):
+            print(f'\n--{mbox_boundary}')
+            write_mbox(f'\n--{mbox_boundary}', mboxfile)
+            set_headers(part.items(), mboxfile)
+            single_message(part, mboxfile)
 
-def nested_message(part, msg_new):
-    sub_messages = list(part.walk())
-    for subpart in sub_messages:
+    #single_message(part)
+    if mbox_boundary:
+        print(f'--{mbox_boundary}--\n')
+        write_mbox(f'--{mbox_boundary}--\n', mboxfile)
+        mbox_boundary = None
 
-        boundary = subpart.get_boundary()
-        subpart_payload = subpart.get_payload()
+    if debugging:
+        print(100*'>')
+        print('\n')
 
-        print(f'subpart ID: {id(subpart)}')
-        print(f'boundary: {boundary}')
-        print(f'content type: {subpart.get_content_type()}')
-        print(f'charset: {part.get_content_charset()}')
-        print(f'content_disposition: {msg.get_content_disposition()}')
-        print(50*'^')
-
-        if type(subpart) is mailbox.mboxMessage:
-            multipart_message(subpart, msg_new)
-        if type(subpart) is email.message.Message:
-            if boundary and subpart is not part \
-                    and type(subpart.get_payload()) is list:
-                nested_message(subpart, msg_new)
-            else:
-                single_message(subpart, msg_new)
-    return msg_new
-
-def single_message(msg, msg_new):
+def single_message(msg, mboxfile):
 
     content_type = msg.get_content_type()
     charset = msg.get_content_charset()
     content_disposition = msg.get_content_disposition()
     payload = None
 
-    if content_type != 'text/plain' \
-            and content_disposition != 'attachment':
+    #don't decode plain text or attachment
+    if content_type == 'text/plain' or content_disposition == 'attachment':
+        payload = msg.get_payload()
+
+    #decode everything else
+    else:
         payload = str(msg.get_payload(decode=True))
         if payload.startswith("b'") and payload.endswith("'"):
             payload = payload[2:-1]
-    else:
-        #usually attachments
-        payload = msg.get_payload()
-    add_payload(payload, msg_new)
-    return msg_new
 
-def add_payload(payload, msg_new):
     if payload:
-        msg_new.set_payload(payload)
-    if msg_new:
-        mbox_new.add(msg_new)
+        print(f'\n{payload}\n')
+        write_mbox(f'\n{payload}\n', mboxfile)
 
-
-def process_message(msg, msg_new):
+def process_message(msg, mboxfile):
     if msg.is_multipart():
-        #if isinstance(msg, mailbox.mboxMessage):
-        #    set_headers(msg.items(), msg_new)
-        multipart_message(msg, msg_new)
+        multipart_message(msg, mboxfile)
     else:
-        set_headers(msg.items(), msg_new)
-        single_message(msg, msg_new)
-    return msg_new
+        message_id = msg['Message-ID']
+        date = msg['Date']
+        if message_id:
+            print(f"From {message_id} {date}") 
+            write_mbox(f"From {message_id} {date}", mboxfile) 
+        set_headers(msg.items(), mboxfile)
+        single_message(msg, mboxfile)
+
+def write_mbox(output, mboxfile):
+    with open(mboxfile, 'a') as fout:
+        ouput = output.replace("\r\n", "\n")
+        fout.write(output + '\n')
 
 for filename in mbox_files:
     if (filename[-4:] == 'mbox'):
@@ -132,11 +159,7 @@ for filename in mbox_files:
 
         for key, value in mbox.iteritems():
             try:
-                msg     = mbox[key]
-                msg_new = mailbox.mboxMessage()
-                msg_new = process_message(msg, msg_new)
-
-
+                process_message(mbox[key], mbox_file_new)
 
             except (AttributeError, KeyError, UnicodeEncodeError) as e:
 
