@@ -23,8 +23,8 @@ os.makedirs(mbox_path_new)
 
 def set_headers(headers, mboxfile):
     for key, value in headers:
-        #print(f'{key}: {value}')
         write_mbox(f'{key}: {value}', mboxfile)
+    write_mbox('\r\n', mboxfile)
 
 def multipart_message(msg, mboxfile):
 
@@ -64,16 +64,15 @@ def multipart_message(msg, mboxfile):
             print('**OUTPUT**')
 
         if type(part) is mailbox.mboxMessage: 
-            if message_id:
-                print(f"From {message_id} {date}")
-                write_mbox(f"From {message_id} {date}", mboxfile)
+            message_id = strip_tags(message_id)
+            date = date.replace(',', '')
+            write_mbox(f'From {message_id} {date}', mboxfile)
             set_headers(part.items(), mboxfile)
             mbox_boundary = part.get_boundary()
 
         elif type(part) is email.message.Message \
                 and type(part.get_payload()) is list:
             sub_messages[boundary] = part.get_payload()
-            print(f'--{mbox_boundary}')
             write_mbox(f'--{mbox_boundary}', mboxfile)
             set_headers(part.items(), mboxfile)
 
@@ -82,33 +81,36 @@ def multipart_message(msg, mboxfile):
             for boundary, message_list in sub_messages.items():
                 if part in message_list:
                     sub_msg_count += 1
-                    print(f'--{boundary}')
                     write_mbox(f'--{boundary}', mboxfile)
                     set_headers(part.items(), mboxfile)
                     single_message(part, mboxfile)
                     
                 if sub_msg_count == len(message_list):
-                    print(f'--{boundary}--')
                     write_mbox(f'--{boundary}--', mboxfile)
                     sub_msg_count = 0
                     
         elif mbox_boundary \
                 and (type(part) is mailbox.mboxMessage \
                 or   type(part) is email.message.Message):
-            print(f'\n--{mbox_boundary}')
-            write_mbox(f'\n--{mbox_boundary}', mboxfile)
+            write_mbox(f'--{mbox_boundary}', mboxfile)
             set_headers(part.items(), mboxfile)
             single_message(part, mboxfile)
 
     #single_message(part)
     if mbox_boundary:
-        print(f'--{mbox_boundary}--\n')
-        write_mbox(f'--{mbox_boundary}--\n', mboxfile)
+        write_mbox(f'--{mbox_boundary}--\r\n', mboxfile)
         mbox_boundary = None
 
     if debugging:
         print(100*'>')
         print('\n')
+
+def strip_tags(html):
+    if html:
+        for char in ['<', '>']:
+            if char in html:
+                html = html.replace(char, '')
+    return html
 
 def single_message(msg, mboxfile):
 
@@ -128,8 +130,7 @@ def single_message(msg, mboxfile):
             payload = payload[2:-1]
 
     if payload:
-        print(f'\n{payload}\n')
-        write_mbox(f'\n{payload}\n', mboxfile)
+        write_mbox(f'{payload}\r\n', mboxfile)
 
 def process_message(msg, mboxfile):
     if msg.is_multipart():
@@ -138,15 +139,18 @@ def process_message(msg, mboxfile):
         message_id = msg['Message-ID']
         date = msg['Date']
         if message_id:
-            print(f"From {message_id} {date}") 
+            message_id = strip_tags(message_id)
+            date = date.replace(',', '') 
             write_mbox(f"From {message_id} {date}", mboxfile) 
         set_headers(msg.items(), mboxfile)
         single_message(msg, mboxfile)
 
 def write_mbox(output, mboxfile):
     with open(mboxfile, 'a') as fout:
-        ouput = output.replace("\r\n", "\n")
-        fout.write(output + '\n')
+        output = output.replace('\\r\\n','')
+        output = (f'{output}\r\n')
+        print(f'{output}')
+        fout.write(output)
 
 for filename in mbox_files:
     if (filename[-4:] == 'mbox'):
@@ -154,8 +158,6 @@ for filename in mbox_files:
         mbox_file       = f'{mbox_path}/{filename}'
         mbox_file_new   = f'{mbox_path_new}/{filename[:-5]}.new.mbox'
         mbox            = mailbox.mbox(mbox_file)
-        mbox_new        = mailbox.mbox(mbox_file_new)
-        mbox_new.lock()
 
         for key, value in mbox.iteritems():
             try:
@@ -166,5 +168,3 @@ for filename in mbox_files:
                 print(crayons.magenta(f"Error for '{mbox_file_new}' {e}"))
                 continue
 
-        mbox_new.flush
-        mbox_new.unlock()
