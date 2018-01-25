@@ -42,7 +42,7 @@ def multipart_message(msg, mboxfile):
         print(messages)
 
     for part in messages:
-        
+
         content_type = part.get_content_type()
         charset = part.get_content_charset()
         boundary = part.get_boundary()
@@ -66,7 +66,7 @@ def multipart_message(msg, mboxfile):
             print('**OUTPUT**')
 
         #if part is a group of messages
-        if type(part) is mailbox.mboxMessage: 
+        if type(part) is mailbox.mboxMessage:
 
             message_id = strip_tags(message_id)
             date = date.replace(',', '')
@@ -95,11 +95,11 @@ def multipart_message(msg, mboxfile):
                     write_mbox(f'--{boundary}', mboxfile)
                     set_headers(part.items(), mboxfile)
                     single_message(part, mboxfile)
-                    
+
                 if sub_msg_count == len(message_list):
                     write_mbox(f'--{boundary}--', mboxfile)
                     sub_msg_count = 0
-                    
+
         #if message is singlular and not a submessage of another message 
         elif mbox_boundary and type(part) is email.message.Message:
 
@@ -129,11 +129,21 @@ def single_message(msg, mboxfile):
     content_disposition = msg.get_content_disposition()
     payload = None
 
-    #don't decode plain text or attachment
-    if not decode_payload or content_type == 'text/plain' \
+    #if one is true
+    if not decode_payload \
+            or content_type == 'text/plain' \
+            or content_type == 'text/calendar' \
             or content_disposition == 'attachment':
+
+        #get raw payload
         payload = msg.get_payload()
-        if not decode_payload and content_disposition != 'attachment':
+
+        if content_type == 'text/plain' \
+                or  (not decode_payload \
+                and (content_type != 'text/calendar' \
+                and  content_disposition != 'attachment')):
+
+            #strip equals '=' character from end of line
             payload_lines = ''
             for line in payload.splitlines():
                 payload_lines += line.rstrip('=')
@@ -145,8 +155,10 @@ def single_message(msg, mboxfile):
         if payload.startswith("b'") and payload.endswith("'"):
             payload = payload[2:-1]
 
-    if payload:
+    if payload and content_disposition != 'attachment':
         write_mbox(f'{payload}\r\n', mboxfile)
+    else:
+        write_mbox(f'{payload}\r\n', mboxfile, redaction=False)
 
 def process_message(msg, mboxfile):
     if msg.is_multipart():
@@ -156,16 +168,17 @@ def process_message(msg, mboxfile):
         date = msg['Date']
         if message_id:
             message_id = strip_tags(message_id)
-            date = date.replace(',', '') 
-            write_mbox(f"From {message_id} {date}", mboxfile) 
+            date = date.replace(',', '')
+            write_mbox(f"From {message_id} {date}", mboxfile)
         set_headers(msg.items(), mboxfile)
         single_message(msg, mboxfile)
 
-def write_mbox(output, mboxfile):
+def write_mbox(output, mboxfile, redaction=True):
     with open(mboxfile, 'a') as fout:
         output = output.replace('\\r\\n','')
         output = (f'{output}\r\n')
-        output = redact(output, redaction_file)
+        if redaction:
+            output = redact(output, redaction_file)
         fout.write(output)
 
         if cli_output:
@@ -176,9 +189,9 @@ def redact(content, redactionfile):
         redaction_words = csv.reader(fin)
         for row in redaction_words:
             for word in row:
-                content = content.replace(word, '[CONTENTS REDACTED]')
+                content = content.replace(word, '[REDACTED]')
     return content
-    
+
 for filename in mbox_files:
     if (filename[-4:] == 'mbox'):
 
@@ -194,4 +207,5 @@ for filename in mbox_files:
 
                 print(f"Error for '{mbox_file_new}' {e}")
                 continue
+
 
