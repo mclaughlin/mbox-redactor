@@ -8,13 +8,16 @@ import mailbox
 import email
 import os
 import shutil
-import crayons
+import csv
 
 __version__ = '0.0.1'
 
-mbox_path     = './mbox_files'
-mbox_path_new = './mbox_files_new'
-mbox_files    = os.listdir(mbox_path)
+mbox_path      = './mbox_files'
+mbox_path_new  = './mbox_files_new'
+redaction_file = './redaction_words.csv'
+mbox_files     = os.listdir(mbox_path)
+decode_payload = False
+cli_output     = False
 
 if os.path.exists(mbox_path_new):
     shutil.rmtree(mbox_path_new)
@@ -32,9 +35,8 @@ def multipart_message(msg, mboxfile):
     sub_msg_count  = 0
     sub_messages   = {}
     boundary_count = {}
-    debugging      = False
 
-    if debugging:
+    if cli_output:
         print(100*'<')
         print(len(messages))
         print(messages)
@@ -48,37 +50,46 @@ def multipart_message(msg, mboxfile):
         message_id = part['Message-ID']
         date = part['Date']
 
-        if debugging:
+        if cli_output:
             print(100*'#')
-            print(f'{type(part)} - {boundary}')
-            print(f'part ID: {id(part)}')
-            print(f'boundary: {boundary}')
-            print(f'content type: {part.get_content_type()}')
-            print(f'charset: {part.get_content_charset()}')
-            print(f'headers: {part.items()}')
+            print(f'message type.......: {type(part)}')
+            print(f'message object ID..: {id(part)}')
+            print(f'boundary...........: {boundary}')
+            print(f'content type.......: {part.get_content_type()}')
+            print(f'charset............: {part.get_content_charset()}')
+            print(f'headers............: {part.items()}')
             print(f'content_disposition: {part.get_content_disposition()}')
-            print(f"message-id: {part['Message-ID']}")
+            print(f"message-id.........: {part['Message-ID']}")
             print(50*'. ')
             #print(msg)
             #print(100*'~')
             print('**OUTPUT**')
 
+        #if part is a group of messages
         if type(part) is mailbox.mboxMessage: 
+
             message_id = strip_tags(message_id)
             date = date.replace(',', '')
             write_mbox(f'From {message_id} {date}', mboxfile)
             set_headers(part.items(), mboxfile)
             mbox_boundary = part.get_boundary()
 
+        #if part contains sub-messages
         elif type(part) is email.message.Message \
                 and type(part.get_payload()) is list:
+
             sub_messages[boundary] = part.get_payload()
             write_mbox(f'--{mbox_boundary}', mboxfile)
             set_headers(part.items(), mboxfile)
 
+        #if individiual message AND message is a submessage of another message
         elif type(part) is email.message.Message \
                 and any(part in val for val in sub_messages.values()):
-            for boundary, message_list in sub_messages.items():
+
+            for key, value in sub_messages.items():
+                boundary     = key
+                message_list = value
+
                 if part in message_list:
                     sub_msg_count += 1
                     write_mbox(f'--{boundary}', mboxfile)
@@ -89,19 +100,18 @@ def multipart_message(msg, mboxfile):
                     write_mbox(f'--{boundary}--', mboxfile)
                     sub_msg_count = 0
                     
-        elif mbox_boundary \
-                and (type(part) is mailbox.mboxMessage \
-                or   type(part) is email.message.Message):
+        #if message is singlular and not a submessage of another message 
+        elif mbox_boundary and type(part) is email.message.Message:
+
             write_mbox(f'--{mbox_boundary}', mboxfile)
             set_headers(part.items(), mboxfile)
             single_message(part, mboxfile)
 
-    #single_message(part)
     if mbox_boundary:
         write_mbox(f'--{mbox_boundary}--\r\n', mboxfile)
         mbox_boundary = None
 
-    if debugging:
+    if cli_output:
         print(100*'>')
         print('\n')
 
@@ -120,12 +130,18 @@ def single_message(msg, mboxfile):
     payload = None
 
     #don't decode plain text or attachment
-    if content_type == 'text/plain' or content_disposition == 'attachment':
+    if not decode_payload or content_type == 'text/plain' \
+            or content_disposition == 'attachment':
         payload = msg.get_payload()
+        if not decode_payload and content_disposition != 'attachment':
+            payload_lines = ''
+            for line in payload.splitlines():
+                payload_lines += line.rstrip('=')
+            payload = payload_lines
 
-    #decode everything else
+    #if set, decode everything else
     else:
-        payload = str(msg.get_payload(decode=True))
+        payload = str(msg.get_payload(decode_payload=True))
         if payload.startswith("b'") and payload.endswith("'"):
             payload = payload[2:-1]
 
@@ -149,9 +165,20 @@ def write_mbox(output, mboxfile):
     with open(mboxfile, 'a') as fout:
         output = output.replace('\\r\\n','')
         output = (f'{output}\r\n')
-        print(f'{output}')
+        output = redact(output, redaction_file)
         fout.write(output)
 
+        if cli_output:
+            print(f'{output}')
+
+def redact(content, redactionfile):
+    with open(redactionfile, newline='') as fin:
+        redaction_words = csv.reader(fin)
+        for row in redaction_words:
+            for word in row:
+                content = content.replace(word, '[CONTENTS REDACTED]')
+    return content
+    
 for filename in mbox_files:
     if (filename[-4:] == 'mbox'):
 
@@ -165,6 +192,6 @@ for filename in mbox_files:
 
             except (AttributeError, KeyError, UnicodeEncodeError) as e:
 
-                print(crayons.magenta(f"Error for '{mbox_file_new}' {e}"))
+                print(f"Error for '{mbox_file_new}' {e}")
                 continue
 
