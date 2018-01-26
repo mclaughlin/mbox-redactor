@@ -12,17 +12,18 @@ import csv
 
 __version__ = '0.0.1'
 
-mbox_path      = './mbox_files'
-mbox_path_new  = './mbox_files_new'
-redaction_file = './redaction_words.csv'
-mbox_files     = os.listdir(mbox_path)
-decode_payload = False
-cli_output     = False
+mbox_path          = './mbox_files'
+mbox_path_new      = './mbox_files_new'
+redaction_file     = './redaction_words.csv'
+decode_payload     = False
+cli_output         = False
+redact_attachments = True
 
 if os.path.exists(mbox_path_new):
     shutil.rmtree(mbox_path_new)
 
 os.makedirs(mbox_path_new)
+mbox_files = os.listdir(mbox_path)
 
 def set_headers(headers, mboxfile):
     for key, value in headers:
@@ -129,7 +130,6 @@ def single_message(msg, mboxfile):
     content_disposition = msg.get_content_disposition()
     payload = None
 
-    #if one is true
     if not decode_payload \
             or content_type == 'text/plain' \
             or content_type == 'text/calendar' \
@@ -149,16 +149,23 @@ def single_message(msg, mboxfile):
                 payload_lines += line.rstrip('=')
             payload = payload_lines
 
-    #if set, decode everything else
+    #decode everything else
     else:
         payload = str(msg.get_payload(decode_payload=True))
         if payload.startswith("b'") and payload.endswith("'"):
             payload = payload[2:-1]
 
-    if payload and content_disposition != 'attachment':
-        write_mbox(f'{payload}\r\n', mboxfile)
+    if payload:
+        #all payloads (except attachments)
+        if content_disposition != 'attachment':
+            write_mbox(f'{payload}\r\n', mboxfile)
+        #redact attachments if set
+        elif content_disposition == 'attachment' \
+                and redact_attachments:
+            write_mbox('[ATTACHMENT REDACTED]\r\n', mboxfile)
+        #don't redact attachmets
     else:
-        write_mbox(f'{payload}\r\n', mboxfile, redaction=False)
+            write_mbox(f'{payload}\r\n', mboxfile, redaction=False)
 
 def process_message(msg, mboxfile):
     if msg.is_multipart():
@@ -207,5 +214,3 @@ for filename in mbox_files:
 
                 print(f"Error for '{mbox_file_new}' {e}")
                 continue
-
-
