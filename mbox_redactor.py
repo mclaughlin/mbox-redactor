@@ -199,18 +199,23 @@ def redact(content, redactionfile):
                 content = content.replace(word, '[REDACTED]')
     return content
 
-for filename in mbox_files:
-    if (filename[-4:] == 'mbox'):
+def main():
+    for filename in mbox_files:
+        if (filename[-4:] == 'mbox'):
 
-        mbox_file       = f'{mbox_path}/{filename}'
-        mbox_file_new   = f'{mbox_path_new}/{filename[:-5]}.new.mbox'
-        mbox            = mailbox.mbox(mbox_file)
+            mbox_file       = f'{mbox_path}/{filename}'
+            mbox_file_new   = f'{mbox_path_new}/{filename[:-5]}.new.mbox'
+            mbox            = mailbox.mbox(mbox_file)
 
-        for key, value in mbox.iteritems():
-            try:
-                process_message(mbox[key], mbox_file_new)
+            for key, value in mbox.iteritems():
+                try:
+                    process_message(mbox[key], mbox_file_new)
 
-            except (AttributeError, KeyError, UnicodeEncodeError) as e:
+                except (AttributeError, KeyError, UnicodeEncodeError) as e:
 
-                print(f"Error for '{mbox_file_new}' {e}")
-                continue
+                    print(f"Error for '{mbox_file_new}' {e}")
+                    continue
+
+if __name__ == '__main__':
+    main()
+
