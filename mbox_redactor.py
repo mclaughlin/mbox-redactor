@@ -9,15 +9,28 @@ import email
 import os
 import shutil
 import csv
+import configparser
 
 __version__ = '0.0.1'
 
-mbox_path          = './mbox_files'
-mbox_path_new      = './mbox_files_new'
-redaction_file     = './redaction_words.csv'
-decode_payload     = False
-cli_output         = False
-redact_attachments = True
+#mbox_path          = './mbox_files'
+#mbox_path_new      = './mbox_files_new'
+#redaction_file     = './redaction_words.csv'
+#decode_payload     = False
+#cli_output         = False
+#redact_attachments = True
+
+config = configparser.ConfigParser()
+config.read('config.ini')
+
+print('TESTTESTTSET')
+
+mbox_path          = config.get('DEFAULT', 'mbox_path')
+mbox_path_new      = config.get('DEFAULT', 'mbox_path_new')
+redaction_file     = config.get('DEFAULT', 'redaction_file')
+decode_payload     = config.get('DEFAULT', 'decode_payload')
+cli_output         = config.get('DEFAULT', 'cli_output')
+redact_attachments = config.get('DEFAULT', 'redact_attachments')
 
 if os.path.exists(mbox_path_new):
     shutil.rmtree(mbox_path_new)
