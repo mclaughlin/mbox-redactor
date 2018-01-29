@@ -151,7 +151,7 @@ def single_message(msg, mboxfile):
 
     #decode everything else
     else:
-        payload = str(msg.get_payload(decode_payload=True))
+        payload = str(msg.get_payload(decode=True))
         if payload.startswith("b'") and payload.endswith("'"):
             payload = payload[2:-1]
 
