@@ -9,35 +9,23 @@ import email
 import os
 import shutil
 import csv
+import configparser
 
 __version__ = '0.0.1'
 
-mbox_path          = './mbox_files'
-mbox_path_new      = './mbox_files_new'
-redaction_file     = './redaction_words.csv'
-decode_payload     = False
-cli_output         = False
-redact_attachments = True
-
-if os.path.exists(mbox_path_new):
-    shutil.rmtree(mbox_path_new)
-
-os.makedirs(mbox_path_new)
-mbox_files = os.listdir(mbox_path)
-
-def set_headers(headers, mboxfile):
+def set_headers(headers, mboxfile, cfg):
     for key, value in headers:
-        write_mbox(f'{key}: {value}', mboxfile)
-    write_mbox('\r\n', mboxfile)
+        write_mbox(f'{key}: {value}', mboxfile, cfg)
+    write_mbox('\r\n', mboxfile, cfg)
 
-def multipart_message(msg, mboxfile):
+def multipart_message(msg, mboxfile, cfg):
 
     messages       = list(msg.walk())
     sub_msg_count  = 0
     sub_messages   = {}
     boundary_count = {}
 
-    if cli_output:
+    if cfg['cli_output']:
         print(100*'<')
         print(len(messages))
         print(messages)
@@ -51,7 +39,7 @@ def multipart_message(msg, mboxfile):
         message_id = part['Message-ID']
         date = part['Date']
 
-        if cli_output:
+        if cfg['cli_output']:
             print(100*'#')
             print(f'message type.......: {type(part)}')
             print(f'message object ID..: {id(part)}')
@@ -71,8 +59,8 @@ def multipart_message(msg, mboxfile):
 
             message_id = strip_tags(message_id)
             date = date.replace(',', '')
-            write_mbox(f'From {message_id} {date}', mboxfile)
-            set_headers(part.items(), mboxfile)
+            write_mbox(f'From {message_id} {date}', mboxfile, cfg)
+            set_headers(part.items(), mboxfile, cfg)
             mbox_boundary = part.get_boundary()
 
         #if part contains sub-messages
@@ -80,8 +68,8 @@ def multipart_message(msg, mboxfile):
                 and type(part.get_payload()) is list:
 
             sub_messages[boundary] = part.get_payload()
-            write_mbox(f'--{mbox_boundary}', mboxfile)
-            set_headers(part.items(), mboxfile)
+            write_mbox(f'--{mbox_boundary}', mboxfile, cfg)
+            set_headers(part.items(), mboxfile, cfg)
 
         #if individiual message AND message is a submessage of another message
         elif type(part) is email.message.Message \
@@ -93,26 +81,26 @@ def multipart_message(msg, mboxfile):
 
                 if part in message_list:
                     sub_msg_count += 1
-                    write_mbox(f'--{boundary}', mboxfile)
-                    set_headers(part.items(), mboxfile)
-                    single_message(part, mboxfile)
+                    write_mbox(f'--{boundary}', mboxfile, cfg)
+                    set_headers(part.items(), mboxfile, cfg)
+                    single_message(part, mboxfile, cfg)
 
                 if sub_msg_count == len(message_list):
-                    write_mbox(f'--{boundary}--', mboxfile)
+                    write_mbox(f'--{boundary}--', mboxfile, cfg)
                     sub_msg_count = 0
 
         #if message is singlular and not a submessage of another message 
         elif mbox_boundary and type(part) is email.message.Message:
 
-            write_mbox(f'--{mbox_boundary}', mboxfile)
-            set_headers(part.items(), mboxfile)
-            single_message(part, mboxfile)
+            write_mbox(f'--{mbox_boundary}', mboxfile, cfg)
+            set_headers(part.items(), mboxfile, cfg)
+            single_message(part, mboxfile, cfg)
 
     if mbox_boundary:
-        write_mbox(f'--{mbox_boundary}--\r\n', mboxfile)
+        write_mbox(f'--{mbox_boundary}--\r\n', mboxfile, cfg)
         mbox_boundary = None
 
-    if cli_output:
+    if cfg['cli_output']:
         print(100*'>')
         print('\n')
 
@@ -123,14 +111,14 @@ def strip_tags(html):
                 html = html.replace(char, '')
     return html
 
-def single_message(msg, mboxfile):
+def single_message(msg, mboxfile, cfg):
 
     content_type = msg.get_content_type()
     charset = msg.get_content_charset()
     content_disposition = msg.get_content_disposition()
     payload = None
 
-    if not decode_payload \
+    if not cfg['decode_payload'] \
             or content_type == 'text/plain' \
             or content_type == 'text/calendar' \
             or content_disposition == 'attachment':
@@ -139,7 +127,7 @@ def single_message(msg, mboxfile):
         payload = msg.get_payload()
 
         if content_type == 'text/plain' \
-                or  (not decode_payload \
+                or  (not cfg['decode_payload'] \
                 and (content_type != 'text/calendar' \
                 and  content_disposition != 'attachment')):
 
@@ -158,37 +146,37 @@ def single_message(msg, mboxfile):
     if payload:
         #all payloads (except attachments)
         if content_disposition != 'attachment':
-            write_mbox(f'{payload}\r\n', mboxfile)
+            write_mbox(f'{payload}\r\n', mboxfile, cfg)
         #redact attachments if set
         elif content_disposition == 'attachment' \
-                and redact_attachments:
-            write_mbox('[ATTACHMENT REDACTED]\r\n', mboxfile)
+                and cfg['redact_attachments']:
+            write_mbox('[ATTACHMENT REDACTED]\r\n', mboxfile, cfg)
         #don't redact attachmets
     else:
-            write_mbox(f'{payload}\r\n', mboxfile, redaction=False)
+            write_mbox(f'{payload}\r\n', mboxfile, cfg, redaction=False)
 
-def process_message(msg, mboxfile):
+def process_message(msg, mboxfile, cfg):
     if msg.is_multipart():
-        multipart_message(msg, mboxfile)
+        multipart_message(msg, mboxfile, cfg)
     else:
         message_id = msg['Message-ID']
         date = msg['Date']
         if message_id:
             message_id = strip_tags(message_id)
             date = date.replace(',', '')
-            write_mbox(f"From {message_id} {date}", mboxfile)
-        set_headers(msg.items(), mboxfile)
-        single_message(msg, mboxfile)
+            write_mbox(f"From {message_id} {date}", mboxfile, cfg)
+        set_headers(msg.items(), mboxfile, cfg)
+        single_message(msg, mboxfile, cfg)
 
-def write_mbox(output, mboxfile, redaction=True):
+def write_mbox(output, mboxfile, cfg, redaction=True):
     with open(mboxfile, 'a') as fout:
         output = output.replace('\\r\\n','')
         output = (f'{output}\r\n')
         if redaction:
-            output = redact(output, redaction_file)
+            output = redact(output, cfg['redaction_file'])
         fout.write(output)
 
-        if cli_output:
+        if cfg['cli_output']:
             print(f'{output}')
 
 def redact(content, redactionfile):
@@ -200,16 +188,32 @@ def redact(content, redactionfile):
     return content
 
 def main():
+
+    configs = configparser.ConfigParser()
+    configs.read('config.ini')
+    config = dict(configs.items('DEFAULT'))
+
+    cfg = {}
+    for key, value in config.items():
+        cfg[key] = value
+
+    #remove output dir if present, and create new
+    if os.path.exists(cfg['mbox_path_new']):
+        shutil.rmtree(cfg['mbox_path_new'])
+    os.makedirs(cfg['mbox_path_new'])
+
+    mbox_files = os.listdir(cfg['mbox_path'])
+
     for filename in mbox_files:
         if (filename[-4:] == 'mbox'):
 
-            mbox_file       = f'{mbox_path}/{filename}'
-            mbox_file_new   = f'{mbox_path_new}/{filename[:-5]}.new.mbox'
+            mbox_file       = f"{cfg['mbox_path']}/{filename}"
+            mbox_file_new   = f"{cfg['mbox_path_new']}/{filename[:-5]}.new.mbox"
             mbox            = mailbox.mbox(mbox_file)
 
             for key, value in mbox.iteritems():
                 try:
-                    process_message(mbox[key], mbox_file_new)
+                    process_message(mbox[key], mbox_file_new, cfg)
 
                 except (AttributeError, KeyError, UnicodeEncodeError) as e:
 
