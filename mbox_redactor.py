@@ -197,7 +197,9 @@ def main():
     for key, value in config.items():
         cfg[key] = value
 
-    #remove output dir if present, and create new
+    #create needed input/output dirs
+    if not os.path.exists(cfg['mbox_path']):
+        os.makedirs(cfg['mbox_path'])
     if os.path.exists(cfg['mbox_path_new']):
         shutil.rmtree(cfg['mbox_path_new'])
     os.makedirs(cfg['mbox_path_new'])
