@@ -187,6 +187,12 @@ def redact(content, redactionfile):
                 content = content.replace(word, '[REDACTED]')
     return content
 
+def string_to_bool(value):
+    if value.title() == 'False':
+        return False
+    else:
+        return value
+
 def main():
 
     configs = configparser.ConfigParser()
@@ -195,7 +201,7 @@ def main():
 
     cfg = {}
     for key, value in config.items():
-        cfg[key] = value
+        cfg[key] = string_to_bool(value)
 
     #create needed input/output dirs
     if not os.path.exists(cfg['mbox_path']):
