@@ -201,7 +201,7 @@ def main():
 
     cfg = {}
     for key, value in config.items():
-        cfg[key] = string_to_bool(value)
+        cfg[key] = false_to_bool(value)
 
     #create needed input/output dirs
     if not os.path.exists(cfg['mbox_path']):
