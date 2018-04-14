@@ -187,7 +187,7 @@ def redact(content, redactionfile):
                 content = content.replace(word, '[REDACTED]')
     return content
 
-def string_to_bool(value):
+def false_to_bool(value):
     if value.title() == 'False':
         return False
     else:
