@@ -15,7 +15,11 @@ __version__ = '0.0.1'
 
 def set_headers(headers, mboxfile, cfg):
     for key, value in headers:
-        write_mbox(f'{key}: {value}', mboxfile, cfg)
+        if key is not 'subject':
+            redaction=False
+        else:
+            redaction=True
+        write_mbox(f'{key}: {value}', mboxfile, cfg, redaction)
     write_mbox('\r\n', mboxfile, cfg)
 
 def multipart_message(msg, mboxfile, cfg):
