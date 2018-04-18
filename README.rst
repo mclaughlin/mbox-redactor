@@ -1,4 +1,5 @@
-# mbox-redactor
+mbox Redactor
+==============================================
 This utility redacts mbox email files (like those exported from Google Vault). It does so by first disassembling each message and sub-message into its individual parts and sub-parts (headers, payload, and boundary markers). It then redacts them based on a list of words defined in the 'redaction_words.csv' file, and then reassembles them in the same order they were dissasembled.
 
 
