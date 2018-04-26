@@ -108,13 +108,6 @@ def multipart_message(msg, mboxfile, cfg):
         print(100*'>')
         print('\n')
 
-def strip_tags(html):
-    if html:
-        for char in ['<', '>']:
-            if char in html:
-                html = html.replace(char, '')
-    return html
-
 def single_message(msg, mboxfile, cfg):
 
     content_type = msg.get_content_type()
@@ -151,12 +144,13 @@ def single_message(msg, mboxfile, cfg):
         #all payloads (except attachments)
         if content_disposition != 'attachment':
             write_mbox(f'{payload}\r\n', mboxfile, cfg)
+            write_names(payload, cfg)
         #redact attachments if set
         elif content_disposition == 'attachment' \
                 and cfg['redact_attachments']:
             write_mbox('[ATTACHMENT REDACTED]\r\n', mboxfile, cfg)
         #don't redact attachmets
-    else:
+        else:
             write_mbox(f'{payload}\r\n', mboxfile, cfg, redaction=False)
 
 def process_message(msg, mboxfile, cfg):
@@ -182,6 +176,39 @@ def write_mbox(output, mboxfile, cfg, redaction=True):
 
         if cfg['cli_output']:
             print(f'{output}')
+
+def strip_tags(html):
+    if html:
+        for char in ['<', '>']:
+            if char in html:
+                html = html.replace(char, '')
+    return html
+
+def nl_preprocess(text):
+    text      = ' '.join([word for word in text.split() \
+                                if word not in stop])
+    sentences = nltk.sent_tokenize(text)
+    sentences = [nltk.word_tokenize(sent) for sent in sentences]
+    sentences = [nltk.pos_tag(sent) for sent in sentences]
+    return sentences
+
+def extract_names(text):
+    names     = []         
+    sentences = nl_preprocess(text)
+    for tagged_sent in sentences:
+        for chunk in nltk.ne_chunk(tagged_sent):
+            if type(chunk) is nltk.tree.Tree and \
+                    (chunk.label() == 'PERSON' or \
+                     chunk.label() == 'GPE'):
+                names.append(' '.join([c[0] for c in chunk]))
+    return names
+
+def write_names(text, cfg):
+    with open(cfg['namesfile'], a) as fout:
+        if cfg['extract_names']:
+            names = extract_names(text)
+            for name in names:
+                fout.write(name)
 
 def redact(content, redactionfile):
     with open(redactionfile, newline='') as fin:
