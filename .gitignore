@@ -1,6 +1,7 @@
 # exclude everything here
 mbox_files/*
 mbox_files_new/
+extracted_names.csv
 
 # exception (keep this stuff)
 !mbox_files/
