@@ -10,6 +10,11 @@ import os
 import shutil
 import csv
 import configparser
+import time
+import re
+import nltk
+from nltk.corpus import stopwords
+
 
 __version__ = '0.0.1'
 
@@ -22,7 +27,7 @@ def set_headers(headers, mboxfile, cfg):
         write_mbox(f'{key}: {value}', mboxfile, cfg, redaction)
     write_mbox('\r\n', mboxfile, cfg)
 
-def multipart_message(msg, mboxfile, cfg):
+def multipart_message(msg, mboxfile, stop, cfg):
 
     messages       = list(msg.walk())
     sub_msg_count  = 0
@@ -87,7 +92,7 @@ def multipart_message(msg, mboxfile, cfg):
                     sub_msg_count += 1
                     write_mbox(f'--{boundary}', mboxfile, cfg)
                     set_headers(part.items(), mboxfile, cfg)
-                    single_message(part, mboxfile, cfg)
+                    single_message(part, mboxfile, stop, cfg)
 
                 if sub_msg_count == len(message_list):
                     write_mbox(f'--{boundary}--', mboxfile, cfg)
@@ -98,7 +103,7 @@ def multipart_message(msg, mboxfile, cfg):
 
             write_mbox(f'--{mbox_boundary}', mboxfile, cfg)
             set_headers(part.items(), mboxfile, cfg)
-            single_message(part, mboxfile, cfg)
+            single_message(part, mboxfile, stop, cfg)
 
     if mbox_boundary:
         write_mbox(f'--{mbox_boundary}--\r\n', mboxfile, cfg)
@@ -108,7 +113,7 @@ def multipart_message(msg, mboxfile, cfg):
         print(100*'>')
         print('\n')
 
-def single_message(msg, mboxfile, cfg):
+def single_message(msg, mboxfile, stop, cfg):
 
     content_type = msg.get_content_type()
     charset = msg.get_content_charset()
@@ -144,7 +149,7 @@ def single_message(msg, mboxfile, cfg):
         #all payloads (except attachments)
         if content_disposition != 'attachment':
             write_mbox(f'{payload}\r\n', mboxfile, cfg)
-            write_names(payload, cfg)
+            write_names(payload, stop, cfg)
         #redact attachments if set
         elif content_disposition == 'attachment' \
                 and cfg['redact_attachments']:
@@ -153,9 +158,9 @@ def single_message(msg, mboxfile, cfg):
         else:
             write_mbox(f'{payload}\r\n', mboxfile, cfg, redaction=False)
 
-def process_message(msg, mboxfile, cfg):
+def process_message(msg, mboxfile, stop, cfg):
     if msg.is_multipart():
-        multipart_message(msg, mboxfile, cfg)
+        multipart_message(msg, mboxfile, stop, cfg)
     else:
         message_id = msg['Message-ID']
         date = msg['Date']
@@ -164,7 +169,7 @@ def process_message(msg, mboxfile, cfg):
             date = date.replace(',', '')
             write_mbox(f"From {message_id} {date}", mboxfile, cfg)
         set_headers(msg.items(), mboxfile, cfg)
-        single_message(msg, mboxfile, cfg)
+        single_message(msg, mboxfile, stop, cfg)
 
 def write_mbox(output, mboxfile, cfg, redaction=True):
     with open(mboxfile, 'a') as fout:
@@ -184,7 +189,7 @@ def strip_tags(html):
                 html = html.replace(char, '')
     return html
 
-def nl_preprocess(text):
+def nl_preprocess(text, stop):
     text      = ' '.join([word for word in text.split() \
                                 if word not in stop])
     sentences = nltk.sent_tokenize(text)
@@ -192,9 +197,9 @@ def nl_preprocess(text):
     sentences = [nltk.pos_tag(sent) for sent in sentences]
     return sentences
 
-def extract_names(text):
+def extract_names(text, stop):
     names     = []         
-    sentences = nl_preprocess(text)
+    sentences = nl_preprocess(text, stop)
     for tagged_sent in sentences:
         for chunk in nltk.ne_chunk(tagged_sent):
             if type(chunk) is nltk.tree.Tree and \
@@ -203,12 +208,14 @@ def extract_names(text):
                 names.append(' '.join([c[0] for c in chunk]))
     return names
 
-def write_names(text, cfg):
-    with open(cfg['namesfile'], a) as fout:
+def write_names(text, stop, cfg):
+    with open(cfg['names_file'], 'a+') as finfout:
         if cfg['extract_names']:
-            names = extract_names(text)
+            names = extract_names(text, stop)
             for name in names:
-                fout.write(name)
+                if name not in finfout.read():
+                    output = (f'{name}\r\n')
+                    finfout.write(output)
 
 def redact(content, redactionfile):
     with open(redactionfile, newline='') as fin:
@@ -229,6 +236,7 @@ def main():
     configs = configparser.ConfigParser()
     configs.read('config.ini')
     config = dict(configs.items('DEFAULT'))
+    stop = stopwords.words('english')
 
     cfg = {}
     for key, value in config.items():
@@ -239,6 +247,8 @@ def main():
         os.makedirs(cfg['mbox_path'])
     if os.path.exists(cfg['mbox_path_new']):
         shutil.rmtree(cfg['mbox_path_new'])
+    if os.path.exists(cfg['names_file']):
+        os.remove(cfg['names_file'])
     os.makedirs(cfg['mbox_path_new'])
 
     mbox_files = os.listdir(cfg['mbox_path'])
@@ -252,7 +262,7 @@ def main():
 
             for key, value in mbox.iteritems():
                 try:
-                    process_message(mbox[key], mbox_file_new, cfg)
+                    process_message(mbox[key], mbox_file_new, stop, cfg)
 
                 except (AttributeError, KeyError, UnicodeEncodeError) as e:
 
