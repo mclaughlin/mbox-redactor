@@ -22,29 +22,46 @@ Configuration (config.ini)
 Configuration Description
 ##########################
 
-    mbox_path [= path]:
-        This is where your unredacted mbox files go.
-    
-    mbox_path_new [= path]:
-        This is where the script will place the redacted mbox files.
-        
-    redaction_file [= path]:
-        This is a csv file that contains a list of words to redact from the mbox files.
-        
-    redact_attachments [= True/False]:
-        If set to True, this will omit attachments, and in their place print [ATTACHMENT REDACTED].
-        
-    extract_names [= True/False]:
-        If set to True, this uses the NLTK library to create a list potential names and save them in the 'names_file'.
-        
-    names_file [= path]:
-        This is the location where the extracted names will be saved.
-        
-    decode_payload [= True/False]:
-        If set to True, this will decode the payload of non-multipart messages based on the Content-Transfer-Encoding header.
+.. list-table::
+   :widths: 40 50 100
+   :header-rows: 1
 
-    cli_output [= True/False]:
-        This will output debugging info.
+   * - Configuration
+     - Value
+     - Description
+
+   * - ``mbox_path``
+     - ``= path``
+     - This is where your unredacted mbox files go.
+
+   * - ``mbox_path_new``
+     - ``= path``
+     - This is where the script will place the redacted mbox files.
+
+   * - ``redaction_file``
+     - ``= path``
+     - This is a csv file that contains a list of words to redact from the mbox files.
+     
+   * - ``redact_attachments``
+     - ``= True/False``
+     - If set to True, this will omit attachments, and in their place print [ATTACHMENT REDACTED].
+     
+   * - ``extract_names``
+     - ``= True/False``
+     - If set to True, this uses the NLTK library to create a list potential names and save them in the 'names_file'.
+        
+   * - ``names_file``
+     - ``= path``
+     - This is the location where the extracted names will be saved.
+        
+   * - ``decode_payload``
+     - = ``True/False``
+     - If set to True, this will decode the payload of non-multipart messages based on the Content-Transfer-Encoding header.
+
+   * - ``cli_output``
+     - ``= True/False``
+     - This will output debugging info.
+
 
 Run the script
 ##############
