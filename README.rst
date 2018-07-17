@@ -30,6 +30,10 @@ Configuration Description
      - Value
      - Description
 
+   * - ``redact``
+     - ``= True/False``
+     - If set to True files will be redacted, if set to False they will still be processed, just not redacted (this allows name extraction, if set, to occur).
+
    * - ``mbox_path``
      - ``= path``
      - This is where your unredacted mbox files go.

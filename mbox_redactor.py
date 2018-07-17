@@ -217,13 +217,14 @@ def write_names(text, stop, cfg):
                     output = (f'{name}\r\n')
                     finfout.write(output)
 
-def redact(content, redactionfile):
-    with open(redactionfile, newline='') as fin:
-        redaction_words = csv.reader(fin)
-        for row in redaction_words:
-            for word in row:
-                content = content.replace(word, '[REDACTED]')
-    return content
+def redact(content, cfg):
+    if cfg['redact']:
+        with open(cfg['redactionfile'], newline='') as fin:
+            redaction_words = csv.reader(fin)
+            for row in redaction_words:
+                for word in row:
+                    content = content.replace(word, '[REDACTED]')
+        return content
 
 def false_to_bool(value):
     if value.title() == 'False':
