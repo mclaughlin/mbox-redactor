@@ -172,15 +172,16 @@ def process_message(msg, mboxfile, stop, cfg):
         single_message(msg, mboxfile, stop, cfg)
 
 def write_mbox(output, mboxfile, cfg, redaction=True):
-    with open(mboxfile, 'a') as fout:
-        output = output.replace('\\r\\n','')
-        output = (f'{output}\r\n')
-        if redaction:
-            output = redact(output, cfg['redaction_file'])
-        fout.write(output)
+    if not cfg['dry_run']:
+        with open(mboxfile, 'a') as fout:
+            output = output.replace('\\r\\n','')
+            output = (f'{output}\r\n')
+            if redaction:
+                output = redact(output, cfg)
+            fout.write(output)
 
-        if cfg['cli_output']:
-            print(f'{output}')
+            if cfg['cli_output']:
+                print(f'{output}')
 
 def strip_tags(html):
     if html:
@@ -198,7 +199,7 @@ def nl_preprocess(text, stop):
     return sentences
 
 def extract_names(text, stop):
-    names     = []         
+    names     = []
     sentences = nl_preprocess(text, stop)
     for tagged_sent in sentences:
         for chunk in nltk.ne_chunk(tagged_sent):
@@ -218,13 +219,12 @@ def write_names(text, stop, cfg):
                     finfout.write(output)
 
 def redact(content, cfg):
-    if cfg['redact']:
-        with open(cfg['redactionfile'], newline='') as fin:
-            redaction_words = csv.reader(fin)
-            for row in redaction_words:
-                for word in row:
-                    content = content.replace(word, '[REDACTED]')
-        return content
+    with open(cfg['redactionfile'], newline='') as fin:
+        redaction_words = csv.reader(fin)
+        for row in redaction_words:
+            for word in row:
+                content = content.replace(word, '[REDACTED]')
+    return content
 
 def false_to_bool(value):
     if value.title() == 'False':
