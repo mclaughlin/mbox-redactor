@@ -219,7 +219,7 @@ def write_names(text, stop, cfg):
                     finfout.write(output)
 
 def redact(content, cfg):
-    with open(cfg['redactionfile'], newline='') as fin:
+    with open(cfg['redaction_file'], newline='') as fin:
         redaction_words = csv.reader(fin)
         for row in redaction_words:
             for word in row:
