@@ -67,14 +67,13 @@ Configuration Description
      - This will output debugging info.
 
 
-Run the script
+Install and run the script
 ##############
 
 .. code-block:: bash
 
-    python ./mbox-redactor/mbox-redactor.py
-
-...or using pipenv::
-
-    pipenv run ./mbox-redactor/mbox-redactor.py
+    git glone https://github.com/mclaughlin/mbox-redactor.git
+    pip install -r requirements.txt
+    cd ./mbox_redactor
+    python ./mbox_redactor.py
 
