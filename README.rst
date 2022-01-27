@@ -72,7 +72,7 @@ Install and run the script
 
 .. code-block:: bash
 
-    git glone https://github.com/mclaughlin/mbox-redactor.git
+    git clone https://github.com/mclaughlin/mbox-redactor.git
     pip install -r requirements.txt
     cd ./mbox_redactor
     python ./mbox_redactor.py
