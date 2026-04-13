@@ -10,29 +10,24 @@ import os
 import shutil
 import csv
 import configparser
-import time
-import re
 import nltk
 from nltk.corpus import stopwords
 
 
 __version__ = '0.0.1'
 
-def set_headers(headers, mboxfile, cfg):
+def set_headers(headers, fout, cfg, redaction_words):
     for key, value in headers:
-        if key is not 'subject':
-            redaction=False
-        else:
-            redaction=True
-        write_mbox(f'{key}: {value}', mboxfile, cfg, redaction)
-    write_mbox('\r\n', mboxfile, cfg)
+        redaction = (key == 'subject')
+        write_mbox(f'{key}: {value}', fout, cfg, redaction_words, redaction)
+    write_mbox('\r\n', fout, cfg, redaction_words)
 
-def multipart_message(msg, mboxfile, stop, cfg):
+def multipart_message(msg, fout, stop, cfg, redaction_words, seen_names):
 
     messages       = list(msg.walk())
     sub_msg_count  = 0
     sub_messages   = {}
-    boundary_count = {}
+    mbox_boundary  = None
 
     if cfg['cli_output']:
         print(100*'<')
@@ -42,7 +37,6 @@ def multipart_message(msg, mboxfile, stop, cfg):
     for part in messages:
 
         content_type = part.get_content_type()
-        charset = part.get_content_charset()
         boundary = part.get_boundary()
         charset = part.get_charset()
         message_id = part['Message-ID']
@@ -59,29 +53,27 @@ def multipart_message(msg, mboxfile, stop, cfg):
             print(f'content_disposition: {part.get_content_disposition()}')
             print(f"message-id.........: {part['Message-ID']}")
             print(50*'. ')
-            #print(msg)
-            #print(100*'~')
             print('**OUTPUT**')
 
         #if part is a group of messages
-        if type(part) is mailbox.mboxMessage:
+        if isinstance(part, mailbox.mboxMessage):
 
             message_id = strip_tags(message_id)
             date = date.replace(',', '')
-            write_mbox(f'From {message_id} {date}', mboxfile, cfg)
-            set_headers(part.items(), mboxfile, cfg)
+            write_mbox(f'From {message_id} {date}', fout, cfg, redaction_words)
+            set_headers(part.items(), fout, cfg, redaction_words)
             mbox_boundary = part.get_boundary()
 
         #if part contains sub-messages
-        elif type(part) is email.message.Message \
-                and type(part.get_payload()) is list:
+        elif isinstance(part, email.message.Message) \
+                and isinstance(part.get_payload(), list):
 
             sub_messages[boundary] = part.get_payload()
-            write_mbox(f'--{mbox_boundary}', mboxfile, cfg)
-            set_headers(part.items(), mboxfile, cfg)
+            write_mbox(f'--{mbox_boundary}', fout, cfg, redaction_words)
+            set_headers(part.items(), fout, cfg, redaction_words)
 
-        #if individiual message AND message is a submessage of another message
-        elif type(part) is email.message.Message \
+        #if individual message AND message is a submessage of another message
+        elif isinstance(part, email.message.Message) \
                 and any(part in val for val in sub_messages.values()):
 
             for key, value in sub_messages.items():
@@ -90,33 +82,31 @@ def multipart_message(msg, mboxfile, stop, cfg):
 
                 if part in message_list:
                     sub_msg_count += 1
-                    write_mbox(f'--{boundary}', mboxfile, cfg)
-                    set_headers(part.items(), mboxfile, cfg)
-                    single_message(part, mboxfile, stop, cfg)
+                    write_mbox(f'--{boundary}', fout, cfg, redaction_words)
+                    set_headers(part.items(), fout, cfg, redaction_words)
+                    single_message(part, fout, stop, cfg, redaction_words, seen_names)
 
                 if sub_msg_count == len(message_list):
-                    write_mbox(f'--{boundary}--', mboxfile, cfg)
+                    write_mbox(f'--{boundary}--', fout, cfg, redaction_words)
                     sub_msg_count = 0
 
-        #if message is singlular and not a submessage of another message 
-        elif mbox_boundary and type(part) is email.message.Message:
+        #if message is singular and not a submessage of another message
+        elif mbox_boundary and isinstance(part, email.message.Message):
 
-            write_mbox(f'--{mbox_boundary}', mboxfile, cfg)
-            set_headers(part.items(), mboxfile, cfg)
-            single_message(part, mboxfile, stop, cfg)
+            write_mbox(f'--{mbox_boundary}', fout, cfg, redaction_words)
+            set_headers(part.items(), fout, cfg, redaction_words)
+            single_message(part, fout, stop, cfg, redaction_words, seen_names)
 
     if mbox_boundary:
-        write_mbox(f'--{mbox_boundary}--\r\n', mboxfile, cfg)
-        mbox_boundary = None
+        write_mbox(f'--{mbox_boundary}--\r\n', fout, cfg, redaction_words)
 
     if cfg['cli_output']:
         print(100*'>')
         print('\n')
 
-def single_message(msg, mboxfile, stop, cfg):
+def single_message(msg, fout, stop, cfg, redaction_words, seen_names):
 
     content_type = msg.get_content_type()
-    charset = msg.get_content_charset()
     content_disposition = msg.get_content_disposition()
     payload = None
 
@@ -129,15 +119,12 @@ def single_message(msg, mboxfile, stop, cfg):
         payload = msg.get_payload()
 
         if content_type == 'text/plain' \
-                or  (not cfg['decode_payload'] \
-                and (content_type != 'text/calendar' \
-                and  content_disposition != 'attachment')):
+                or (not cfg['decode_payload'] \
+                and content_type != 'text/calendar' \
+                and content_disposition != 'attachment'):
 
             #strip equals '=' character from end of line
-            payload_lines = ''
-            for line in payload.splitlines():
-                payload_lines += line.rstrip('=')
-            payload = payload_lines
+            payload = ''.join(line.rstrip('=') for line in payload.splitlines())
 
     #decode everything else
     else:
@@ -148,51 +135,46 @@ def single_message(msg, mboxfile, stop, cfg):
     if payload:
         #all payloads (except attachments)
         if content_disposition != 'attachment':
-            write_mbox(f'{payload}\r\n', mboxfile, cfg)
-            write_names(payload, stop, cfg)
+            write_mbox(f'{payload}\r\n', fout, cfg, redaction_words)
+            write_names(payload, stop, cfg, seen_names)
         #redact attachments if set
-        elif content_disposition == 'attachment' \
-                and cfg['redact_attachments']:
-            write_mbox('[ATTACHMENT REDACTED]\r\n', mboxfile, cfg)
-        #don't redact attachmets
+        elif cfg['redact_attachments']:
+            write_mbox('[ATTACHMENT REDACTED]\r\n', fout, cfg, redaction_words)
+        #don't redact attachments
         else:
-            write_mbox(f'{payload}\r\n', mboxfile, cfg, redaction=False)
+            write_mbox(f'{payload}\r\n', fout, cfg, redaction_words, redaction=False)
 
-def process_message(msg, mboxfile, stop, cfg):
+def process_message(msg, fout, stop, cfg, redaction_words, seen_names):
     if msg.is_multipart():
-        multipart_message(msg, mboxfile, stop, cfg)
+        multipart_message(msg, fout, stop, cfg, redaction_words, seen_names)
     else:
         message_id = msg['Message-ID']
         date = msg['Date']
         if message_id:
             message_id = strip_tags(message_id)
             date = date.replace(',', '')
-            write_mbox(f"From {message_id} {date}", mboxfile, cfg)
-        set_headers(msg.items(), mboxfile, cfg)
-        single_message(msg, mboxfile, stop, cfg)
+            write_mbox(f'From {message_id} {date}', fout, cfg, redaction_words)
+        set_headers(msg.items(), fout, cfg, redaction_words)
+        single_message(msg, fout, stop, cfg, redaction_words, seen_names)
 
-def write_mbox(output, mboxfile, cfg, redaction=True):
+def write_mbox(output, fout, cfg, redaction_words, redaction=True):
     if not cfg['dry_run']:
-        with open(mboxfile, 'a') as fout:
-            output = output.replace('\\r\\n','')
-            output = (f'{output}\r\n')
-            if redaction:
-                output = redact(output, cfg)
-            fout.write(output)
+        output = output.replace('\\r\\n', '')
+        output = f'{output}\r\n'
+        if redaction:
+            output = redact(output, redaction_words)
+        fout.write(output)
 
-            if cfg['cli_output']:
-                print(f'{output}')
+        if cfg['cli_output']:
+            print(output)
 
 def strip_tags(html):
     if html:
-        for char in ['<', '>']:
-            if char in html:
-                html = html.replace(char, '')
+        html = html.replace('<', '').replace('>', '')
     return html
 
 def nl_preprocess(text, stop):
-    text      = ' '.join([word for word in text.split() \
-                                if word not in stop])
+    text      = ' '.join(word for word in text.split() if word not in stop)
     sentences = nltk.sent_tokenize(text)
     sentences = [nltk.word_tokenize(sent) for sent in sentences]
     sentences = [nltk.pos_tag(sent) for sent in sentences]
@@ -203,45 +185,50 @@ def extract_names(text, stop):
     sentences = nl_preprocess(text, stop)
     for tagged_sent in sentences:
         for chunk in nltk.ne_chunk(tagged_sent):
-            if type(chunk) is nltk.tree.Tree and \
-                    (chunk.label() == 'PERSON' or \
-                     chunk.label() == 'GPE'):
-                names.append(' '.join([c[0] for c in chunk]))
+            if isinstance(chunk, nltk.tree.Tree) and \
+                    chunk.label() in ('PERSON', 'GPE'):
+                names.append(' '.join(c[0] for c in chunk))
     return names
 
-def write_names(text, stop, cfg):
-    with open(cfg['names_file'], 'a+') as finfout:
-        if cfg['extract_names']:
-            names = extract_names(text, stop)
-            for name in names:
-                if name not in finfout.read():
-                    output = (f'{name}\r\n')
-                    finfout.write(output)
+def write_names(text, stop, cfg, seen_names):
+    if cfg['extract_names']:
+        names = [n for n in extract_names(text, stop) if n not in seen_names]
+        if names:
+            seen_names.update(names)
+            with open(cfg['names_file'], 'a') as fout:
+                for name in names:
+                    fout.write(f'{name}\r\n')
 
-def redact(content, cfg):
-    with open(cfg['redaction_file'], newline='') as fin:
-        redaction_words = csv.reader(fin)
-        for row in redaction_words:
-            for word in row:
-                content = content.replace(word, '[REDACTED]')
+def redact(content, redaction_words):
+    for word in redaction_words:
+        content = content.replace(word, '[REDACTED]')
     return content
 
-def false_to_bool(value):
-    if value.title() == 'False':
+def load_redaction_words(path):
+    words = []
+    with open(path, newline='') as fin:
+        for row in csv.reader(fin):
+            words.extend(row)
+    return words
+
+def parse_bool(value):
+    lower = value.strip().lower()
+    if lower == 'true':
+        return True
+    if lower == 'false':
         return False
-    else:
-        return value
+    return value
 
 def main():
 
     configs = configparser.ConfigParser()
     configs.read('config.ini')
     config = dict(configs.items('DEFAULT'))
-    stop = stopwords.words('english')
+    stop = set(stopwords.words('english'))
 
-    cfg = {}
-    for key, value in config.items():
-        cfg[key] = false_to_bool(value)
+    cfg = {key: parse_bool(value) for key, value in config.items()}
+    redaction_words = load_redaction_words(cfg['redaction_file'])
+    seen_names = set()
 
     #create needed input/output dirs
     if not os.path.exists(cfg['mbox_path']):
@@ -252,24 +239,20 @@ def main():
         os.remove(cfg['names_file'])
     os.makedirs(cfg['mbox_path_new'])
 
-    mbox_files = os.listdir(cfg['mbox_path'])
+    for filename in os.listdir(cfg['mbox_path']):
+        if not filename.endswith('.mbox'):
+            continue
 
-    for filename in mbox_files:
-        if (filename[-4:] == 'mbox'):
+        mbox_file     = os.path.join(cfg['mbox_path'], filename)
+        mbox_file_new = os.path.join(cfg['mbox_path_new'], f'{filename[:-5]}.new.mbox')
+        mbox          = mailbox.mbox(mbox_file)
 
-            mbox_file       = f"{cfg['mbox_path']}/{filename}"
-            mbox_file_new   = f"{cfg['mbox_path_new']}/{filename[:-5]}.new.mbox"
-            mbox            = mailbox.mbox(mbox_file)
-
-            for key, value in mbox.iteritems():
+        with open(mbox_file_new, 'a') as fout:
+            for key in mbox.keys():
                 try:
-                    process_message(mbox[key], mbox_file_new, stop, cfg)
-
+                    process_message(mbox[key], fout, stop, cfg, redaction_words, seen_names)
                 except (AttributeError, KeyError, UnicodeEncodeError) as e:
-
-                    print(f"Error for '{mbox_file_new}' {e}")
-                    continue
+                    print(f"Error for '{mbox_file_new}': {e}")
 
 if __name__ == '__main__':
     main()
-
